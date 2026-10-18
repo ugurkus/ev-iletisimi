@@ -1,7 +1,10 @@
 package com.ev.iletisim.update
 
 import android.content.Context
+import android.net.wifi.WifiManager
+import android.os.Build
 import android.util.Log
+import java.io.BufferedOutputStream
 import java.io.File
 import java.io.IOException
 import java.net.InetSocketAddress
@@ -17,6 +20,10 @@ import kotlin.concurrent.thread
 object ApkServer {
     const val PORT = 8765
     private const val TAG = "EvPaylas"
+    private const val BUFFER = 256 * 1024
+    @Suppress("DEPRECATION")
+    private val WIFI_MODE =
+        if (Build.VERSION.SDK_INT >= 29) WifiManager.WIFI_MODE_FULL_LOW_LATENCY else WifiManager.WIFI_MODE_FULL_HIGH_PERF
     @Volatile private var socket: ServerSocket? = null
 
     @Synchronized
@@ -24,6 +31,7 @@ object ApkServer {
         if (socket?.isClosed == false) return true
         val apk = File(context.applicationInfo.sourceDir)
         val version = Updater.currentVersion(context)
+        val wifi = context.applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
         val s = try {
             ServerSocket().apply {
                 reuseAddress = true
@@ -38,24 +46,30 @@ object ApkServer {
             while (!s.isClosed) {
                 val client = try { s.accept() } catch (e: SocketException) { break }
                 thread(isDaemon = true) {
+                    // Gönderim sürerken Wi‑Fi güç tasarrufuna geçmesin; geçerse hız çok düşer
+                    val lock = wifi.createWifiLock(WIFI_MODE, "ev-paylas").apply { setReferenceCounted(false); acquire() }
                     try {
                         client.use { c ->
                             c.soTimeout = 10_000
+                            c.tcpNoDelay = true
+                            c.sendBufferSize = BUFFER
                             val path = c.getInputStream().bufferedReader().readLine()
                                 ?.split(" ")?.getOrNull(1).orEmpty()
-                            val out = c.getOutputStream()
+                            val out = BufferedOutputStream(c.getOutputStream(), BUFFER)
                             if (path == "/version") {
                                 val body = version.toString().toByteArray()
                                 out.write(header("text/plain", body.size.toLong(), null))
                                 out.write(body)
                             } else {
                                 out.write(header("application/vnd.android.package-archive", apk.length(), "ev-iletisimi.apk"))
-                                apk.inputStream().use { it.copyTo(out) }
+                                apk.inputStream().use { it.copyTo(out, BUFFER) }
                             }
                             out.flush()
                         }
                     } catch (e: IOException) {
                         Log.i(TAG, "İndirme yarıda kaldı: ${e.message}")
+                    } finally {
+                        lock.release()
                     }
                 }
             }

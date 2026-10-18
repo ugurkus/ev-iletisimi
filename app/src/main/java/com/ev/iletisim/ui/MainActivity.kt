@@ -5,7 +5,6 @@ import android.app.Activity
 import android.app.AlertDialog
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.PowerManager
@@ -191,7 +190,9 @@ class MainActivity : Activity() {
     }
 
     private fun askBatteryExemption() {
-        startActivity(Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:$packageName")))
+        // Doğrudan izin istemek Play Protect'in dikkatini çekiyor; pil ayar listesi açılır
+        Toast.makeText(this, "Listede Ev İletişimi'ni bulup \"Kısıtlama yok\" seçin", Toast.LENGTH_LONG).show()
+        startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
     }
 }
 

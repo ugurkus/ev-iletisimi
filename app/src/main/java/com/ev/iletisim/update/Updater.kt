@@ -56,7 +56,7 @@ object Updater {
             val c = URL(update.url).openConnection() as HttpURLConnection
             c.connectTimeout = 8_000
             c.readTimeout = 30_000
-            c.inputStream.use { input -> out.outputStream().use { input.copyTo(it) } }
+            c.inputStream.buffered(256 * 1024).use { input -> out.outputStream().buffered(256 * 1024).use { input.copyTo(it, 256 * 1024) } }
             out
         } catch (e: IOException) {
             out.delete()

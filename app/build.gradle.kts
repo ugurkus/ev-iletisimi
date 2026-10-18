@@ -15,11 +15,13 @@ android {
         val build = System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 1
         versionCode = build
         versionName = "0.$build"
+        // Evdeki telefon ve tabletlerin işlemcileri; emülatör kütüphaneleri APK'yı boşuna büyütüyordu
+        ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a") }
     }
 
     // Her derleme aynı anahtarla imzalansın ki yeni sürüm eskinin üstüne kurulabilsin
     signingConfigs {
-        getByName("debug") {
+        create("ev") {
             storeFile = rootProject.file("ev-debug.keystore")
             storePassword = "android"
             keyAlias = "androiddebugkey"
@@ -29,7 +31,13 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            signingConfig = signingConfigs.getByName("ev")
+        }
+        debug {
+            signingConfig = signingConfigs.getByName("ev")
         }
     }
     compileOptions {
@@ -38,6 +46,10 @@ android {
     }
     kotlinOptions {
         jvmTarget = "17"
+    }
+    // Yerel kütüphaneler sıkıştırılsın: indirme boyutu yarıya iner
+    packaging {
+        jniLibs.useLegacyPackaging = true
     }
     testOptions {
         unitTests.isReturnDefaultValues = true
