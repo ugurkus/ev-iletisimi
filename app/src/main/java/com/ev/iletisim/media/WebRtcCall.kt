@@ -32,6 +32,7 @@ class WebRtcCall(
     context: Context,
     private val sendSignal: (type: String, payload: JSONObject) -> Unit,
     private val onConnectionChange: (connected: Boolean) -> Unit,
+    private val video: Boolean = true,
 ) {
     private val appContext = context.applicationContext
     private val egl: EglBase = EglBase.create()
@@ -66,7 +67,7 @@ class WebRtcCall(
         remoteRenderer = remote
 
         val enumerator = Camera2Enumerator(appContext)
-        val camera = enumerator.deviceNames.firstOrNull { enumerator.isFrontFacing(it) }
+        val camera = if (!video) null else enumerator.deviceNames.firstOrNull { enumerator.isFrontFacing(it) }
             ?: enumerator.deviceNames.firstOrNull()
         if (camera != null) {
             val cap = enumerator.createCapturer(camera, null)
@@ -215,9 +216,10 @@ class WebRtcCall(
     companion object {
         private const val TAG = "EvGorusme"
         private const val STREAM_ID = "ev"
-        private const val VIDEO_WIDTH = 1280
-        private const val VIDEO_HEIGHT = 720
-        private const val VIDEO_FPS = 30
+        // Çocuk tabletlerinde de akıcı kalsın diye orta çözünürlük
+        private const val VIDEO_WIDTH = 960
+        private const val VIDEO_HEIGHT = 540
+        private const val VIDEO_FPS = 24
 
         @Volatile private var initialized = false
 

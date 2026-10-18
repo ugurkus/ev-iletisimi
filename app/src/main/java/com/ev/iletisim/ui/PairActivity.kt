@@ -14,6 +14,7 @@ import com.ev.iletisim.Ev
 import com.ev.iletisim.core.PairingInvite
 import com.ev.iletisim.core.Role
 import com.google.zxing.BarcodeFormat
+import com.google.zxing.EncodeHintType
 import com.google.zxing.qrcode.QRCodeWriter
 
 /** Sadece yetişkin telefonlarda: yeni cihaz için ad ve rol seçilir, QR gösterilir. */
@@ -55,7 +56,7 @@ class PairActivity : Activity() {
     }
 
     private fun render(content: String, size: Int = 720): Bitmap {
-        val matrix = QRCodeWriter().encode(content, BarcodeFormat.QR_CODE, size, size)
+        val matrix = QRCodeWriter().encode(content, BarcodeFormat.QR_CODE, size, size, mapOf(EncodeHintType.CHARACTER_SET to "UTF-8"))
         val pixels = IntArray(size * size) { i -> if (matrix[i % size, i / size]) Color.BLACK else Color.WHITE }
         return Bitmap.createBitmap(pixels, size, size, Bitmap.Config.ARGB_8888)
     }

@@ -2,7 +2,11 @@ package com.ev.iletisim.ui
 
 import android.app.Activity
 import android.os.Bundle
+import android.view.Gravity
+import android.view.View
+import android.view.ViewGroup
 import android.widget.ArrayAdapter
+import android.widget.TextView
 import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.ListView
@@ -28,10 +32,15 @@ class ChatActivity : Activity() {
         val root = column()
         val header = LinearLayout(this).apply { gravity = android.view.Gravity.CENTER_VERTICAL }
         header.addView(title(peer?.name ?: "Sohbet"), LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
-        header.addView(button("📹 Ara", Look.TONAL) { startActivity(CallActivity.callIntent(this, peerId)) })
+        header.addView(
+            button("📞 Sesli", Look.TONAL) { startActivity(CallActivity.callIntent(this, peerId, video = false)) },
+            LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { marginEnd = dp(8) },
+        )
+        header.addView(button("📹 Görüntülü", Look.TONAL) { startActivity(CallActivity.callIntent(this, peerId, video = true)) })
         root.addView(header)
         list = ListView(this).apply {
             divider = null
+            selector = android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT)
             transcriptMode = ListView.TRANSCRIPT_MODE_ALWAYS_SCROLL
             isStackFromBottom = true
         }
@@ -86,16 +95,42 @@ class ChatActivity : Activity() {
 
     private fun render() {
         val myId = Ev.identity?.deviceId
-        val lines = Ev.db.conversation(peerId).map { m ->
-            val mark = when (m.status) {
-                MessageStatus.PENDING -> "  ⏳"
-                MessageStatus.DELIVERED -> "  ✓"
-                MessageStatus.RECEIVED -> ""
-            }
-            val who = if (m.from == myId) "Sen" else "O"
-            "${time.format(Date(m.sentAt))}  $who: ${m.text}$mark"
+        val messages = Ev.db.conversation(peerId)
+        list.adapter = object : ArrayAdapter<ChatMessage>(this, 0, messages) {
+            override fun getView(position: Int, convertView: View?, parent: ViewGroup) =
+                bubble(messages[position], messages[position].from == myId)
         }
-        list.adapter = ArrayAdapter(this, android.R.layout.simple_list_item_1, lines)
+    }
+
+    /** Benim mesajlarım sağda vurgu renginde, karşı tarafınkiler solda nötr balonda. */
+    private fun bubble(m: ChatMessage, mine: Boolean): View {
+        val pal = Palette(this)
+        val mark = when (m.status) {
+            MessageStatus.PENDING -> "  ⏳"
+            MessageStatus.DELIVERED -> "  ✓"
+            MessageStatus.RECEIVED -> ""
+        }
+        val body = TextView(this).apply {
+            text = m.text
+            textSize = 17f
+            setTextColor(if (mine) pal.onPrimary else pal.text)
+            background = rounded(if (mine) pal.primary else pal.surface, 18)
+            setPadding(dp(14), dp(10), dp(14), dp(10))
+            maxWidth = (resources.displayMetrics.widthPixels * 0.75).toInt()
+        }
+        val meta = TextView(this).apply {
+            text = time.format(Date(m.sentAt)) + mark
+            textSize = 12f
+            setTextColor(pal.subtle)
+            setPadding(dp(6), dp(2), dp(6), 0)
+        }
+        return LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = if (mine) Gravity.END else Gravity.START
+            setPadding(0, dp(4), 0, dp(4))
+            addView(body)
+            addView(meta)
+        }
     }
 
     companion object {

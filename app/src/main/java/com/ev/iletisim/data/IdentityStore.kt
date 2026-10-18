@@ -33,6 +33,11 @@ class IdentityStore(context: Context) {
         return identity
     }
 
+    /** Cihazın adını değiştirir; diğer cihazlar bir sonraki bağlantıda yeni adı görür. */
+    fun rename(name: String) {
+        prefs.edit().putString("name", name).apply()
+    }
+
     /** Katılırken QR'dan öğrenilen ilk cihazın adresi (yoksa null). */
     fun inviterHint(): PairingInvite.Hint? {
         val id = prefs.getString("hint_id", null) ?: return null

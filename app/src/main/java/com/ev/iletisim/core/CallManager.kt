@@ -8,7 +8,8 @@ import java.util.concurrent.Executors
 import java.util.concurrent.ScheduledFuture
 import java.util.concurrent.TimeUnit
 
-data class Call(val id: String, val peer: PeerInfo, val incoming: Boolean)
+/** video=false: yalnızca sesli arama, kamera açılmaz. */
+data class Call(val id: String, val peer: PeerInfo, val incoming: Boolean, val video: Boolean = true)
 
 enum class EndReason(val text: String) {
     HANGUP("Görüşme bitti"),
@@ -66,12 +67,12 @@ class CallManager(
 
     /** Arama başlatır. Başlatılamazsa nedenini döner. */
     @Synchronized
-    fun call(peerId: String): EndReason? {
+    fun call(peerId: String, video: Boolean = true): EndReason? {
         if (state !is CallState.Idle) return EndReason.BUSY
         val peer = peerInfo(peerId) ?: return EndReason.OFFLINE
         if (!CallPolicy.allows(me.role, peer.role, minuteOfDay())) return EndReason.QUIET_HOURS
-        val call = Call(UUID.randomUUID().toString(), peer, incoming = false)
-        if (!transport(peerId, frame("call-invite", call.id))) return EndReason.OFFLINE
+        val call = Call(UUID.randomUUID().toString(), peer, incoming = false, video = video)
+        if (!transport(peerId, frame("call-invite", call.id).put("video", video))) return EndReason.OFFLINE
         setState(CallState.Ringing(call))
         startRingTimeout(call)
         return null
@@ -112,7 +113,7 @@ class CallManager(
         val type = frame.optString("type")
         val callId = frame.optString("call")
         if (type == "call-invite") {
-            onInvite(peerId, callId)
+            onInvite(peerId, callId, frame.optBoolean("video", true))
             return
         }
         val call = currentCall()
@@ -145,7 +146,7 @@ class CallManager(
 
     fun shutdown() = timer.shutdownNow()
 
-    private fun onInvite(peerId: String, callId: String) {
+    private fun onInvite(peerId: String, callId: String, video: Boolean) {
         val caller = peerInfo(peerId) ?: return
         val reject = when {
             state !is CallState.Idle -> "busy"
@@ -156,7 +157,7 @@ class CallManager(
             transport(peerId, frame("call-reject", callId).put("reason", reject))
             return
         }
-        val call = Call(callId, caller, incoming = true)
+        val call = Call(callId, caller, incoming = true, video = video)
         setState(CallState.Ringing(call))
         startRingTimeout(call)
     }

@@ -25,8 +25,19 @@ data class PairingInvite(
             if (inviter != null) put("id", inviter.deviceId).put("h", inviter.host).put("p", inviter.port)
         }
         .toString()
+        .let(::asciiOnly)
 
     companion object {
+        /**
+         * QR okuyucuların çoğu Türkçe harfleri (ğ, ş, ı, İ…) bozuyor; JSON'da \\uXXXX
+         * kaçışıyla yazılınca QR'da yalnızca ASCII kalır, ad JSON okunurken geri gelir.
+         */
+        fun asciiOnly(json: String): String = buildString {
+            for (ch in json) {
+                if (ch.code < 0x80) append(ch) else append("\\u%04x".format(ch.code))
+            }
+        }
+
         /** QR içeriği bu uygulamaya ait değilse null döner. */
         fun decode(text: String): PairingInvite? = try {
             val o = JSONObject(text)

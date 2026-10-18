@@ -52,6 +52,8 @@ class MainActivity : Activity() {
         super.onResume()
         Ev.addListener(refresh)
         render()
+        showLastCrash()
+        askCallPermissionsOnce()
         handler.postDelayed(ticker, 3_000)
     }
 
@@ -121,7 +123,7 @@ class MainActivity : Activity() {
 
     private fun renderFamily(myName: String, role: Role) {
         val root = column()
-        root.addView(title("Merhaba, $myName"))
+        root.addView(title("Merhaba, $myName ✏️").apply { setOnClickListener { askRename(myName) } })
         if (role == Role.ADMIN) {
             root.addView(button("➕ Yeni cihaz ekle (QR göster)") { startActivity(Intent(this, PairActivity::class.java)) })
         }
@@ -201,6 +203,46 @@ class MainActivity : Activity() {
         }
     }
 
+    private fun showLastCrash() {
+        val prefs = getSharedPreferences("crash", MODE_PRIVATE)
+        val trace = prefs.getString("last", null) ?: return
+        prefs.edit().remove("last").apply()
+        AlertDialog.Builder(this)
+            .setTitle("Uygulama beklenmedik şekilde kapandı")
+            .setMessage("Bu ekranın görüntüsünü gönderirseniz sorunu bulmak kolaylaşır.\n\n$trace")
+            .setPositiveButton("Tamam", null)
+            .show()
+    }
+
+    /**
+     * Kamera ve mikrofon izni aramadan önce, aileye katılınca bir kez istenir. Kilit ekranında
+     * gelen bir aramada izin penceresi açılamıyor ve cevaplama başarısız oluyordu.
+     */
+    private fun askCallPermissionsOnce() {
+        if (Ev.identity == null || callPermissionsAsked) return
+        callPermissionsAsked = true
+        val missing = arrayOf(Manifest.permission.CAMERA, Manifest.permission.RECORD_AUDIO)
+            .filter { checkSelfPermission(it) != PackageManager.PERMISSION_GRANTED }
+        if (missing.isNotEmpty()) requestPermissions(missing.toTypedArray(), 2)
+    }
+
+    private fun askRename(current: String) {
+        val input = EditText(this).apply { setText(current) }
+        AlertDialog.Builder(this)
+            .setTitle("Bu cihazın adı")
+            .setView(input)
+            .setPositiveButton("Kaydet") { _, _ ->
+                val name = input.text.toString().trim()
+                if (name.isEmpty()) return@setPositiveButton
+                Ev.identities.rename(name)
+                // Yeni ad el sıkışmada gider; bağlantılar yeniden kurulsun
+                EvService.restart(this)
+                render()
+            }
+            .setNegativeButton("Vazgeç", null)
+            .show()
+    }
+
     private fun askNameAndCreate() {
         val input = EditText(this).apply { hint = "Örn. Babam" }
         AlertDialog.Builder(this)
@@ -248,6 +290,7 @@ class MainActivity : Activity() {
     companion object {
         /** Uygulama her açılışında bir kez kendiliğinden güncelleme arar. */
         private var autoChecked = false
+        private var callPermissionsAsked = false
     }
 
     private fun askBatteryExemption() {

@@ -16,6 +16,13 @@ class EvApp : Application() {
     override fun onCreate() {
         super.onCreate()
         Ev.init(this)
+        // Beklenmedik çökme olursa kısa özeti saklanır; ana ekran bir sonraki açılışta gösterir
+        val previous = Thread.getDefaultUncaughtExceptionHandler()
+        Thread.setDefaultUncaughtExceptionHandler { thread, e ->
+            val trace = e.stackTraceToString().lineSequence().take(12).joinToString("\n")
+            getSharedPreferences("crash", MODE_PRIVATE).edit().putString("last", trace).commit()
+            previous?.uncaughtException(thread, e)
+        }
     }
 }
 

@@ -46,6 +46,15 @@ class DiscoveryTest {
         assertNull(PairingInvite.decode(PairingInvite(secret, "Tablet", Role.CHILD).encode())!!.inviter)
     }
 
+    @Test fun turkishNameSurvivesQr() {
+        val name = "Ayşe'nin tableti ğüşıöç İĞÜŞÖÇ"
+        val text = PairingInvite(secret, name, Role.CHILD).encode()
+        assertTrue("QR içeriği yalnızca ASCII olmalı", text.all { it.code < 0x80 })
+        // QR okuyucu metni Latin-1 olarak bile okusa ASCII bozulmaz
+        val viaLatin1 = String(text.toByteArray(Charsets.ISO_8859_1), Charsets.ISO_8859_1)
+        assertEquals(name, PairingInvite.decode(viaLatin1)!!.name)
+    }
+
     @Test fun onlyLargerIdSeesTheOtherStillConnects() {
         // Keşif yalnız bir yönde çalıştı: küçük kimlikli cihaz karşıyı hiç görmedi.
         val a = device("Baba", "aaaa")

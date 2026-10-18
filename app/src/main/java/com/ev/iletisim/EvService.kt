@@ -118,7 +118,7 @@ class EvService : Service(), PeerManager.Events, CallManager.Listener {
         val screen = openApp(Intent(this, CallActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
         val n = Notification.Builder(this, CHANNEL_CALLS)
             .setContentTitle("${state.call.peer.name} arıyor")
-            .setContentText("Görüntülü arama")
+            .setContentText(if (state.call.video) "Görüntülü arama" else "Sesli arama")
             .setSmallIcon(android.R.drawable.sym_call_incoming)
             .setCategory(Notification.CATEGORY_CALL)
             .setFullScreenIntent(screen, true)
@@ -174,6 +174,11 @@ class EvService : Service(), PeerManager.Events, CallManager.Listener {
 
         fun start(context: Context) {
             context.startForegroundService(Intent(context, EvService::class.java))
+        }
+
+        fun restart(context: Context) {
+            context.stopService(Intent(context, EvService::class.java))
+            start(context)
         }
     }
 }

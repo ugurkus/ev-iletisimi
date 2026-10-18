@@ -96,6 +96,24 @@ class CallTest {
         assertEquals(EndReason.HANGUP, kid.lastEnd)
     }
 
+    @Test fun audioOnlyCallWithTurkishNames() {
+        val dad = Node("Uğur Işık", "aaaa", Role.ADMIN)
+        val kid = Node("Şükrü Çağlayan İnce", "bbbb", Role.CHILD)
+        connect(dad, kid)
+
+        assertNull(dad.calls.call("bbbb", video = false))
+        waitUntil { kid.calls.state is CallState.Ringing }
+        val ringing = kid.calls.state as CallState.Ringing
+        assertFalse("Sesli arama karşıda da sesli görünmeli", ringing.call.video)
+        assertEquals("Uğur Işık", ringing.call.peer.name)
+
+        kid.calls.accept()
+        waitUntil { dad.calls.state is CallState.Active }
+        assertFalse((dad.calls.state as CallState.Active).call.video)
+        assertEquals("Şükrü Çağlayan İnce", (dad.calls.state as CallState.Active).call.peer.name)
+        dad.calls.hangup()
+    }
+
     @Test fun childrenCannotCallEachOtherAtNightEvenIfCallerIsModified() {
         minute = 23 * 60
         val ali = Node("Ali", "aaaa", Role.CHILD)

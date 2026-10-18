@@ -8,7 +8,9 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.media.AudioManager
 import android.os.Bundle
+import android.util.Log
 import android.view.Gravity
+import android.view.View
 import android.view.WindowManager
 import android.widget.Button
 import android.widget.FrameLayout
@@ -27,7 +29,7 @@ import org.webrtc.RendererCommon
 import org.webrtc.SurfaceViewRenderer
 
 /**
- * Görüntülü görüşme ekranı. Arama başlatırken [EXTRA_PEER] ile açılır; gelen aramada
+ * Görüntülü ve sesli görüşme ekranı. Arama başlatırken [EXTRA_PEER] ile açılır; gelen aramada
  * bildirimden açılır ve o anki çalan aramayı gösterir.
  */
 class CallActivity : Activity(), CallManager.Listener {
@@ -39,8 +41,13 @@ class CallActivity : Activity(), CallManager.Listener {
     private var media: WebRtcCall? = null
     private var muted = false
     private var cameraOff = false
+    private var speaker = true
+    /** false: yalnızca sesli arama. Giden aramada ekrandan, gelende aramanın kendisinden gelir. */
+    private var video = true
+    private val cameraButtons = mutableListOf<View>()
     private var pendingAccept = false
     private var pendingOutgoing: String? = null
+    private val earlySignals = mutableListOf<JSONObject>()
 
     private val calls get() = Ev.calls
 
@@ -49,7 +56,9 @@ class CallActivity : Activity(), CallManager.Listener {
         setShowWhenLocked(true)
         setTurnScreenOn(true)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        video = intent.getBooleanExtra(EXTRA_VIDEO, true)
         buildUi()
+        setMode(video)
 
         val calls = calls
         if (calls == null) {
@@ -61,7 +70,7 @@ class CallActivity : Activity(), CallManager.Listener {
         if (peerToCall != null && savedInstanceState == null) {
             if (hasMediaPermissions()) placeCall(peerToCall) else {
                 pendingOutgoing = peerToCall
-                requestPermissions(MEDIA_PERMISSIONS, REQ_MEDIA)
+                requestPermissions(mediaPermissions(), REQ_MEDIA)
             }
         }
         render(calls.state)
@@ -78,18 +87,25 @@ class CallActivity : Activity(), CallManager.Listener {
     override fun onCallState(state: CallState) = runOnUiThread { render(state) }
 
     override fun onMediaSignal(call: Call, frame: JSONObject) {
-        runOnUiThread { media?.onSignal(frame) }
+        runOnUiThread {
+            // Karşı tarafın teklifi, bu cihazın kamerası hazır olmadan gelebilir; kaybolmasın
+            val m = media
+            if (m == null) earlySignals.add(frame) else m.onSignal(frame)
+        }
     }
 
     private fun render(state: CallState) {
         when (state) {
             is CallState.Idle -> Unit
             is CallState.Ringing -> {
+                setMode(state.call.video)
                 val name = state.call.peer.name
-                status.text = if (state.call.incoming) "$name arıyor…" else "$name aranıyor…"
+                val kind = if (state.call.video) "Görüntülü arama" else "Sesli arama"
+                status.text = if (state.call.incoming) "$name arıyor…\n$kind" else "$name aranıyor…\n$kind"
                 acceptButton.visibility = if (state.call.incoming) android.view.View.VISIBLE else android.view.View.GONE
             }
             is CallState.Active -> {
+                setMode(state.call.video)
                 cancelRingNotification()
                 acceptButton.visibility = android.view.View.GONE
                 status.text = "${state.call.peer.name} ile bağlanılıyor…"
@@ -105,7 +121,7 @@ class CallActivity : Activity(), CallManager.Listener {
     private fun onAcceptPressed() {
         if (!hasMediaPermissions()) {
             pendingAccept = true
-            requestPermissions(MEDIA_PERMISSIONS, REQ_MEDIA)
+            requestPermissions(mediaPermissions(), REQ_MEDIA)
             return
         }
         Ev.io.execute { calls?.accept() }
@@ -114,24 +130,45 @@ class CallActivity : Activity(), CallManager.Listener {
     private fun startMedia(makesOffer: Boolean) {
         if (media != null) return
         if (!hasMediaPermissions()) {
-            requestPermissions(MEDIA_PERMISSIONS, REQ_MEDIA)
+            requestPermissions(mediaPermissions(), REQ_MEDIA)
             return
         }
-        val call = WebRtcCall(
-            this,
-            sendSignal = { type, payload -> Ev.io.execute { calls?.sendMedia(type, payload) } },
-            onConnectionChange = { connected ->
-                runOnUiThread {
-                    if (connected) status.text = ""
-                    else Ev.io.execute { calls?.hangup(EndReason.FAILED) }
-                }
-            },
-        )
+        val call = try {
+            WebRtcCall(
+                this,
+                sendSignal = { type, payload -> Ev.io.execute { calls?.sendMedia(type, payload) } },
+                onConnectionChange = { connected ->
+                    runOnUiThread {
+                        if (connected) status.text = if (video) "" else "${(calls?.state as? CallState.Active)?.call?.peer?.name ?: ""}\nSesli görüşme"
+                        else Ev.io.execute { calls?.hangup(EndReason.FAILED) }
+                    }
+                },
+                video = video,
+            )
+        } catch (e: Throwable) {
+            failMedia(e)
+            return
+        }
+        try {
+            call.start(localView, remoteView)
+        } catch (e: Throwable) {
+            runCatching { call.close() }
+            failMedia(e)
+            return
+        }
         media = call
         audio(inCall = true)
-        call.start(localView, remoteView)
         controls.visibility = android.view.View.VISIBLE
         if (makesOffer) call.makeOffer()
+        earlySignals.forEach { call.onSignal(it) }
+        earlySignals.clear()
+    }
+
+    /** Kamera ya da WebRTC açılamadıysa nedenini göster; uygulama çökmesin. */
+    private fun failMedia(e: Throwable) {
+        Log.e(TAG, "Görüşme başlatılamadı", e)
+        Toast.makeText(this, "Görüşme başlatılamadı: ${e.message ?: e.javaClass.simpleName}", Toast.LENGTH_LONG).show()
+        Ev.io.execute { calls?.hangup(EndReason.FAILED) }
     }
 
     private fun stopMedia() {
@@ -173,7 +210,7 @@ class CallActivity : Activity(), CallManager.Listener {
     private fun placeCall(peerId: String) {
         val c = calls ?: return
         Ev.io.execute {
-            val failure = c.call(peerId)
+            val failure = c.call(peerId, video)
             if (failure != null) runOnUiThread { finishWith(failure) }
         }
     }
@@ -191,11 +228,24 @@ class CallActivity : Activity(), CallManager.Listener {
         val am = getSystemService(Context.AUDIO_SERVICE) as AudioManager
         am.mode = if (inCall) AudioManager.MODE_IN_COMMUNICATION else AudioManager.MODE_NORMAL
         // Tablet ve telefonlar elde tutulmadan kullanılacağı için hoparlör açık.
-        am.isSpeakerphoneOn = inCall
+        am.isSpeakerphoneOn = inCall && speaker
     }
 
+    /** Sesli aramada görüntü alanları ve kamera düğmeleri gizlenir. */
+    private fun setMode(isVideo: Boolean) {
+        video = isVideo
+        val v = if (isVideo) View.VISIBLE else View.GONE
+        localView.visibility = v
+        remoteView.visibility = v
+        cameraButtons.forEach { it.visibility = v }
+    }
+
+    private fun mediaPermissions() =
+        if (video) arrayOf(Manifest.permission.CAMERA, Manifest.permission.RECORD_AUDIO)
+        else arrayOf(Manifest.permission.RECORD_AUDIO)
+
     private fun hasMediaPermissions() =
-        MEDIA_PERMISSIONS.all { checkSelfPermission(it) == PackageManager.PERMISSION_GRANTED }
+        mediaPermissions().all { checkSelfPermission(it) == PackageManager.PERMISSION_GRANTED }
 
     private fun cancelRingNotification() {
         getSystemService(NotificationManager::class.java)?.cancel(EvService.CALL_NOTIFICATION_ID)
@@ -219,6 +269,7 @@ class CallActivity : Activity(), CallManager.Listener {
             },
         )
         status = TextView(this).apply {
+            gravity = Gravity.CENTER
             textSize = 22f
             setTextColor(android.graphics.Color.WHITE)
             setShadowLayer(4f, 0f, 0f, android.graphics.Color.BLACK)
@@ -238,14 +289,22 @@ class CallActivity : Activity(), CallManager.Listener {
                 b.text = if (muted) "Sesi aç" else "Sessiz"
             }
         })
+        controls.addView(button("🔊 Hoparlör", Look.TONAL) {}.also { b ->
+            b.setOnClickListener {
+                speaker = !speaker
+                audio(inCall = true)
+                b.text = if (speaker) "🔊 Hoparlör" else "📱 Kulaklık"
+            }
+        })
         controls.addView(button("Kamera kapat", Look.TONAL) {}.also { b ->
+            cameraButtons += b
             b.setOnClickListener {
                 cameraOff = !cameraOff
                 media?.setCameraOff(cameraOff)
                 b.text = if (cameraOff) "Kamera aç" else "Kamera kapat"
             }
         })
-        controls.addView(button("Kamerayı çevir", Look.TONAL) { media?.switchCamera() })
+        controls.addView(button("Çevir", Look.TONAL) { media?.switchCamera() }.also { cameraButtons += it })
         for (i in 0 until controls.childCount) {
             (controls.getChildAt(i).layoutParams as? LinearLayout.LayoutParams)?.marginEnd = dp(8)
         }
@@ -270,11 +329,12 @@ class CallActivity : Activity(), CallManager.Listener {
     }
 
     companion object {
+        private const val TAG = "EvArama"
         const val EXTRA_PEER = "peer"
         private const val REQ_MEDIA = 7
-        private val MEDIA_PERMISSIONS = arrayOf(Manifest.permission.CAMERA, Manifest.permission.RECORD_AUDIO)
+        private const val EXTRA_VIDEO = "video"
 
-        fun callIntent(context: Context, peerId: String) =
-            Intent(context, CallActivity::class.java).putExtra(EXTRA_PEER, peerId)
+        fun callIntent(context: Context, peerId: String, video: Boolean = true) =
+            Intent(context, CallActivity::class.java).putExtra(EXTRA_PEER, peerId).putExtra(EXTRA_VIDEO, video)
     }
 }
