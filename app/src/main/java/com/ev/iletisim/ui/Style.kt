@@ -22,7 +22,7 @@ import java.net.NetworkInterface
  * gelen dinamik renkler), boşluklar, yuvarlatılmış düğmeler ve kartlar.
  * Çocuklar da rahat basabilsin diye düğmeler büyük, yazılar iri.
  */
-internal class Palette(context: Context) {
+internal class Palette(private val context: Context) {
     val dark = (context.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) ==
         Configuration.UI_MODE_NIGHT_YES
     private fun sys(id: Int, fallback: Int) =
