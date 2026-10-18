@@ -36,6 +36,17 @@
         </activity>
         <activity android:name=".ui.ChatActivity" android:windowSoftInputMode="adjustResize" />
         <activity android:name=".ui.PairActivity" />
+        <activity android:name=".ui.ShareActivity" />
+
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.paylas"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/paylas" />
+        </provider>
         <!-- Döndürünce ekran yeniden kurulmasın, yoksa görüşme kopar -->
         <activity
             android:name=".ui.CallActivity"

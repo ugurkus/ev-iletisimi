@@ -11,8 +11,18 @@ android {
         applicationId = "com.ev.iletisim"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "0.1"
+        versionCode = 2
+        versionName = "0.2"
+    }
+
+    // Her derleme aynı anahtarla imzalansın ki yeni sürüm eskinin üstüne kurulabilsin
+    signingConfigs {
+        getByName("debug") {
+            storeFile = rootProject.file("ev-debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
     }
 
     buildTypes {

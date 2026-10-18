@@ -64,6 +64,7 @@ class MainActivity : Activity() {
         root.addView(text("Bu cihaz henüz bir aileye bağlı değil."))
         root.addView(button("Yeni aile kur (bu telefon yetişkinin)") { askNameAndCreate() })
         root.addView(button("Aileye katıl (QR okut)") { scanInvite() })
+        root.addView(button("📲 Uygulamayı paylaş") { startActivity(Intent(this, ShareActivity::class.java)) })
         fitSystemBars(root)
         setContentView(root)
     }
@@ -72,8 +73,9 @@ class MainActivity : Activity() {
         val root = column()
         root.addView(title("Merhaba, $myName"))
         if (role == Role.ADMIN) {
-            root.addView(button("Yeni cihaz ekle") { startActivity(Intent(this, PairActivity::class.java)) })
+            root.addView(button("➕ Yeni cihaz ekle (QR göster)") { startActivity(Intent(this, PairActivity::class.java)) })
         }
+        root.addView(button("📲 Uygulamayı paylaş") { startActivity(Intent(this, ShareActivity::class.java)) })
         val contacts = Ev.db.contacts()
         if (contacts.isEmpty()) {
             root.addView(text("Henüz başka cihaz görülmedi. Diğer cihazlar aynı Wi‑Fi'da açık olmalı."))
