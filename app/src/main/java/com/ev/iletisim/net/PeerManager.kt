@@ -81,6 +81,9 @@ class PeerManager(
 
     fun isOnline(peerId: String) = connections.containsKey(peerId)
 
+    /** Şu an bağlı ve kimliği doğrulanmış aile cihazlarının adresleri. */
+    fun onlineHosts(): List<InetAddress> = connections.values.mapNotNull { it.socket.inetAddress }
+
     /** Şu an bağlı cihazın el sıkışmada bildirdiği bilgi. */
     fun peerInfo(peerId: String): PeerInfo? = connections[peerId]?.channel?.peer
 

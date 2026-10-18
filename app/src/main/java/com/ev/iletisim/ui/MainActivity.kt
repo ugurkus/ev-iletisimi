@@ -24,10 +24,12 @@ import com.ev.iletisim.EvService
 import com.ev.iletisim.core.PairingInvite
 import com.ev.iletisim.core.PeerInfo
 import com.ev.iletisim.core.Role
+import com.ev.iletisim.update.Updater
 import com.google.zxing.integration.android.IntentIntegrator
 
 /** Kurulmamışsa aile kurma / katılma ekranı, kurulduysa aile cihazları listesi. */
 class MainActivity : Activity() {
+    private lateinit var list: ListView
     private val refresh: () -> Unit = { render() }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -55,6 +57,45 @@ class MainActivity : Activity() {
         if (me == null) renderSetup() else {
             EvService.start(this)
             renderFamily(me.name, me.role)
+            if (!autoChecked) {
+                autoChecked = true
+                // Servis aile cihazlarına bağlanırken biraz beklenir
+                list.postDelayed({ checkUpdate(quiet = true) }, 5_000)
+            }
+        }
+    }
+
+    private fun checkUpdate(quiet: Boolean) {
+        if (!quiet) Toast.makeText(this, "Güncelleme aranıyor…", Toast.LENGTH_SHORT).show()
+        Ev.io.execute {
+            val update = Updater.findUpdate(this)
+            runOnUiThread {
+                if (isFinishing) return@runOnUiThread
+                if (update == null) {
+                    if (!quiet) Toast.makeText(this, "Uygulama güncel", Toast.LENGTH_SHORT).show()
+                    return@runOnUiThread
+                }
+                AlertDialog.Builder(this)
+                    .setTitle("Yeni sürüm var")
+                    .setMessage(if (update.fromHome) "Evdeki bir cihazdan indirilecek." else "İnternetten indirilecek.")
+                    .setPositiveButton("Güncelle") { _, _ -> downloadAndInstall(update) }
+                    .setNegativeButton("Sonra", null)
+                    .show()
+            }
+        }
+    }
+
+    private fun downloadAndInstall(update: Updater.Update) {
+        Toast.makeText(this, "İndiriliyor, biraz sürebilir…", Toast.LENGTH_LONG).show()
+        Ev.io.execute {
+            val apk = Updater.download(this, update)
+            runOnUiThread {
+                when {
+                    apk == null -> Toast.makeText(this, "İndirilemedi, sonra tekrar deneyin", Toast.LENGTH_LONG).show()
+                    !Updater.install(this, apk) ->
+                        Toast.makeText(this, "İzni açıp geri dönün, sonra yine Güncelle'ye basın", Toast.LENGTH_LONG).show()
+                }
+            }
         }
     }
 
@@ -76,11 +117,12 @@ class MainActivity : Activity() {
             root.addView(button("➕ Yeni cihaz ekle (QR göster)") { startActivity(Intent(this, PairActivity::class.java)) })
         }
         root.addView(button("📲 Uygulamayı paylaş") { startActivity(Intent(this, ShareActivity::class.java)) })
+        root.addView(button("🔄 Güncelleme var mı?") { checkUpdate(quiet = false) })
         val contacts = Ev.db.contacts()
         if (contacts.isEmpty()) {
             root.addView(text("Henüz başka cihaz görülmedi. Diğer cihazlar aynı Wi‑Fi'da açık olmalı."))
         }
-        val list = ListView(this)
+        list = ListView(this)
         list.adapter = ArrayAdapter(this, android.R.layout.simple_list_item_1, contacts.map(::label))
         list.setOnItemClickListener { _, _, pos, _ ->
             startActivity(Intent(this, ChatActivity::class.java).putExtra(ChatActivity.EXTRA_PEER, contacts[pos].deviceId))
@@ -143,6 +185,11 @@ class MainActivity : Activity() {
     }
 
     @Suppress("BatteryLife")
+    companion object {
+        /** Uygulama her açılışında bir kez kendiliğinden güncelleme arar. */
+        private var autoChecked = false
+    }
+
     private fun askBatteryExemption() {
         startActivity(Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:$packageName")))
     }

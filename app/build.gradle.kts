@@ -11,8 +11,10 @@ android {
         applicationId = "com.ev.iletisim"
         minSdk = 26
         targetSdk = 35
-        versionCode = 2
-        versionName = "0.2"
+        // GitHub'daki her derleme bir öncekinden büyük numara alır; güncelleme bunu karşılaştırır
+        val build = System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 1
+        versionCode = build
+        versionName = "0.$build"
     }
 
     // Her derleme aynı anahtarla imzalansın ki yeni sürüm eskinin üstüne kurulabilsin

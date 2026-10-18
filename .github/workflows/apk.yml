@@ -28,6 +28,7 @@ jobs:
           git checkout --orphan apk
           git rm -rfq .
           cp /tmp/ev-iletisimi.apk .
-          git add ev-iletisimi.apk
+          echo "$GITHUB_RUN_NUMBER" > version.txt
+          git add ev-iletisimi.apk version.txt
           git commit -qm "APK ${GITHUB_SHA}"
           git push -f origin apk

@@ -23,6 +23,7 @@ import com.ev.iletisim.net.PeerManager
 import com.ev.iletisim.ui.CallActivity
 import com.ev.iletisim.ui.ChatActivity
 import com.ev.iletisim.ui.MainActivity
+import com.ev.iletisim.update.ApkServer
 
 /**
  * Uygulama kapalıyken de mesaj alabilmek için sürekli çalışan ön plan servisi.
@@ -62,6 +63,7 @@ class EvService : Service(), PeerManager.Events, CallManager.Listener {
         Ev.calls = calls
         Ev.io.execute {
             manager.start()
+            ApkServer.start(this)
             discovery = Discovery(this, me.deviceId, manager::onEndpoint).also { it.start(manager.port) }
         }
     }
