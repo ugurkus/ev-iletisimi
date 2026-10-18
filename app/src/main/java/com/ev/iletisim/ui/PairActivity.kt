@@ -48,6 +48,7 @@ class PairActivity : Activity() {
         })
         root.addView(text("Yeni cihazda \"Aileye katıl\" deyip bu QR'ı okutun."))
         root.addView(qr, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f))
+        fitSystemBars(root)
         setContentView(root)
     }
 

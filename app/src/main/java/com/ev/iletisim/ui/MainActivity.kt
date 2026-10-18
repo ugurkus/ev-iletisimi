@@ -10,6 +10,8 @@ import android.os.Build
 import android.os.Bundle
 import android.os.PowerManager
 import android.provider.Settings
+import android.view.View
+import android.view.WindowInsets
 import android.widget.ArrayAdapter
 import android.widget.Button
 import android.widget.EditText
@@ -62,6 +64,7 @@ class MainActivity : Activity() {
         root.addView(text("Bu cihaz henüz bir aileye bağlı değil."))
         root.addView(button("Yeni aile kur (bu telefon yetişkinin)") { askNameAndCreate() })
         root.addView(button("Aileye katıl (QR okut)") { scanInvite() })
+        fitSystemBars(root)
         setContentView(root)
     }
 
@@ -85,6 +88,7 @@ class MainActivity : Activity() {
             val pm = getSystemService(PowerManager::class.java)!!
             if (pm.isIgnoringBatteryOptimizations(packageName)) visibility = android.view.View.GONE
         })
+        fitSystemBars(root)
         setContentView(root)
     }
 
@@ -161,4 +165,30 @@ internal fun Activity.text(s: String) = TextView(this).apply {
 internal fun Activity.button(label: String, onClick: () -> Unit) = Button(this).apply {
     text = label
     setOnClickListener { onClick() }
+}
+
+// Android 15'ten itibaren uygulama ekranın tamamına çiziliyor; durum çubuğu,
+// alt çubuk ve klavye kadar boşluk bırak ki yazılar altlarında kalmasın
+internal fun fitSystemBars(root: View) {
+    val left = root.paddingLeft
+    val top = root.paddingTop
+    val right = root.paddingRight
+    val bottom = root.paddingBottom
+    root.setOnApplyWindowInsetsListener { v, insets ->
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            val bars = insets.getInsets(
+                WindowInsets.Type.systemBars() or WindowInsets.Type.displayCutout() or WindowInsets.Type.ime(),
+            )
+            v.setPadding(left + bars.left, top + bars.top, right + bars.right, bottom + bars.bottom)
+        } else {
+            @Suppress("DEPRECATION")
+            v.setPadding(
+                left + insets.systemWindowInsetLeft,
+                top + insets.systemWindowInsetTop,
+                right + insets.systemWindowInsetRight,
+                bottom + insets.systemWindowInsetBottom,
+            )
+        }
+        insets
+    }
 }

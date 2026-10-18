@@ -46,6 +46,7 @@ class ChatActivity : Activity() {
             }
         })
         root.addView(row)
+        fitSystemBars(root)
         setContentView(root)
     }
 

@@ -23,7 +23,7 @@
         android:allowBackup="false"
         android:icon="@android:drawable/sym_action_chat"
         android:label="Ev İletişimi"
-        android:theme="@android:style/Theme.DeviceDefault.DayNight"
+        android:theme="@style/EvTheme"
         tools:targetApi="35">
 
         <activity

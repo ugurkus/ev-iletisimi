@@ -255,6 +255,7 @@ class CallActivity : Activity(), CallManager.Listener {
         bottom.addView(actions)
         root.addView(bottom, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM))
         root.setBackgroundColor(android.graphics.Color.BLACK)
+        fitSystemBars(root)
         setContentView(root)
     }
 
