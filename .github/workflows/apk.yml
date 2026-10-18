@@ -1,7 +1,10 @@
 name: APK derle
 on:
   push:
+    branches: [main]
   workflow_dispatch:
+permissions:
+  contents: write
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -17,3 +20,14 @@ jobs:
         with:
           name: ev-iletisimi-apk
           path: app/build/outputs/apk/debug/*.apk
+      - name: APK'yı apk dalına koy
+        run: |
+          cp app/build/outputs/apk/debug/app-debug.apk /tmp/ev-iletisimi.apk
+          git config user.name "github-actions"
+          git config user.email "github-actions@users.noreply.github.com"
+          git checkout --orphan apk
+          git rm -rfq .
+          cp /tmp/ev-iletisimi.apk .
+          git add ev-iletisimi.apk
+          git commit -qm "APK ${GITHUB_SHA}"
+          git push -f origin apk
