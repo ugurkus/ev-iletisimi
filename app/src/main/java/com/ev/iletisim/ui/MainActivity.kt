@@ -12,7 +12,6 @@ import android.provider.Settings
 import android.view.View
 import android.view.WindowInsets
 import android.widget.ArrayAdapter
-import android.widget.Button
 import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.ListView
@@ -40,14 +39,25 @@ class MainActivity : Activity() {
         }
     }
 
+    // Bağlanma durumu her an değişebilir; ekran açıkken birkaç saniyede bir yenilenir
+    private val ticker = object : Runnable {
+        override fun run() {
+            if (Ev.identity != null) render()
+            handler.postDelayed(this, 3_000)
+        }
+    }
+    private val handler = android.os.Handler(android.os.Looper.getMainLooper())
+
     override fun onResume() {
         super.onResume()
         Ev.addListener(refresh)
         render()
+        handler.postDelayed(ticker, 3_000)
     }
 
     override fun onPause() {
         Ev.removeListener(refresh)
+        handler.removeCallbacks(ticker)
         super.onPause()
     }
 
@@ -104,7 +114,7 @@ class MainActivity : Activity() {
         root.addView(text("Bu cihaz henüz bir aileye bağlı değil."))
         root.addView(button("Yeni aile kur (bu telefon yetişkinin)") { askNameAndCreate() })
         root.addView(button("Aileye katıl (QR okut)") { scanInvite() })
-        root.addView(button("📲 Uygulamayı paylaş") { startActivity(Intent(this, ShareActivity::class.java)) })
+        root.addView(button("📲 Uygulamayı paylaş", Look.TONAL) { startActivity(Intent(this, ShareActivity::class.java)) })
         fitSystemBars(root)
         setContentView(root)
     }
@@ -115,29 +125,80 @@ class MainActivity : Activity() {
         if (role == Role.ADMIN) {
             root.addView(button("➕ Yeni cihaz ekle (QR göster)") { startActivity(Intent(this, PairActivity::class.java)) })
         }
-        root.addView(button("📲 Uygulamayı paylaş") { startActivity(Intent(this, ShareActivity::class.java)) })
-        root.addView(button("🔄 Güncelleme var mı?") { checkUpdate(quiet = false) })
+        val tools = LinearLayout(this)
+        tools.addView(
+            button("📲 Paylaş", Look.TONAL) { startActivity(Intent(this, ShareActivity::class.java)) },
+            LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply { marginEnd = dp(12) },
+        )
+        tools.addView(
+            button("🔄 Güncelle", Look.TONAL) { checkUpdate(quiet = false) },
+            LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f),
+        )
+        root.addView(tools)
+
+        root.addView(section("AİLEM"))
         val contacts = Ev.db.contacts()
-        if (contacts.isEmpty()) {
-            root.addView(text("Henüz başka cihaz görülmedi. Diğer cihazlar aynı Wi‑Fi'da açık olmalı."))
+        networkNote(contacts.isEmpty())?.let { root.addView(card(text(it))) }
+        list = ListView(this).apply {
+            divider = null
+            dividerHeight = dp(12)
+            selector = android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT)
         }
-        list = ListView(this)
-        list.adapter = ArrayAdapter(this, android.R.layout.simple_list_item_1, contacts.map(::label))
+        list.adapter = object : ArrayAdapter<PeerInfo>(this, 0, contacts) {
+            override fun getView(position: Int, convertView: View?, parent: android.view.ViewGroup) =
+                contactCard(contacts[position])
+        }
         list.setOnItemClickListener { _, _, pos, _ ->
             startActivity(Intent(this, ChatActivity::class.java).putExtra(ChatActivity.EXTRA_PEER, contacts[pos].deviceId))
         }
-        root.addView(list, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f))
-        root.addView(button("Pil kısıtlamasını kaldır") { askBatteryExemption() }.apply {
-            val pm = getSystemService(PowerManager::class.java)!!
-            if (pm.isIgnoringBatteryOptimizations(packageName)) visibility = android.view.View.GONE
-        })
+        root.addView(list, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f).apply { topMargin = dp(12) })
+        val pm = getSystemService(PowerManager::class.java)!!
+        if (!pm.isIgnoringBatteryOptimizations(packageName)) {
+            root.addView(button("🔋 Pil kısıtlamasını kaldır", Look.TONAL) { askBatteryExemption() })
+        }
         fitSystemBars(root)
         setContentView(root)
     }
 
-    private fun label(p: PeerInfo): String {
-        val online = if (Ev.peers?.isOnline(p.deviceId) == true) "● açık" else "○ kapalı"
-        return "${p.name}  (${p.role.label})   $online"
+    /** Kişi listesinin üstündeki not: ağ sorunu, arama ya da bağlanma durumu. */
+    private fun networkNote(noContacts: Boolean): String? {
+        Ev.netProblem?.let { return it }
+        val peers = Ev.peers ?: return "Başlatılıyor…"
+        val connected = peers.onlineHosts().size
+        val known = peers.knownCount()
+        return when {
+            known > connected -> buildString {
+                append("Evde ${known - connected} cihaz bulundu, bağlanılıyor…")
+                peers.lastError?.let { append("\n\nSon hata: ").append(it) }
+            }
+            noContacts -> "Evdeki diğer cihazlar aranıyor… Hepsi aynı Wi‑Fi'a bağlı ve uygulama açık olmalı."
+            else -> null
+        }
+    }
+
+    private fun contactCard(p: PeerInfo): View {
+        val pal = Palette(this)
+        val peers = Ev.peers
+        val (state, color) = when {
+            peers?.isOnline(p.deviceId) == true -> "● Bağlı" to pal.online
+            peers?.isKnown(p.deviceId) == true -> "◌ Bağlanıyor…" to pal.subtle
+            else -> "○ Görünmüyor" to pal.subtle
+        }
+        val name = TextView(this).apply {
+            text = p.name
+            textSize = 20f
+            setTextColor(pal.text)
+        }
+        val info = TextView(this).apply {
+            text = "${p.role.label}  ·  $state"
+            textSize = 15f
+            setTextColor(color)
+        }
+        return card().apply {
+            minimumHeight = dp(72)
+            addView(name)
+            addView(info)
+        }
     }
 
     private fun askNameAndCreate() {
@@ -194,27 +255,6 @@ class MainActivity : Activity() {
         Toast.makeText(this, "Listede Ev İletişimi'ni bulup \"Kısıtlama yok\" seçin", Toast.LENGTH_LONG).show()
         startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
     }
-}
-
-internal fun Activity.column() = LinearLayout(this).apply {
-    orientation = LinearLayout.VERTICAL
-    val pad = (16 * resources.displayMetrics.density).toInt()
-    setPadding(pad, pad, pad, pad)
-}
-
-internal fun Activity.title(s: String) = TextView(this).apply {
-    text = s
-    textSize = 24f
-}
-
-internal fun Activity.text(s: String) = TextView(this).apply {
-    text = s
-    textSize = 16f
-}
-
-internal fun Activity.button(label: String, onClick: () -> Unit) = Button(this).apply {
-    text = label
-    setOnClickListener { onClick() }
 }
 
 // Android 15'ten itibaren uygulama ekranın tamamına çiziliyor; durum çubuğu,

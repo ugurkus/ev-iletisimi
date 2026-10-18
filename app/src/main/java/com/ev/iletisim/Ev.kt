@@ -28,6 +28,8 @@ object Ev {
     /** Servis çalışırken dolu olur. */
     @Volatile var peers: PeerManager? = null
     @Volatile var calls: CallManager? = null
+    /** Servisin ağ tarafında ciddi bir sorun varsa ekranda gösterilir. */
+    @Volatile var netProblem: String? = null
 
     /** Ağ işleri ana iş parçacığında yapılamaz; ekranlar mesaj göndermek için bunu kullanır. */
     val io = Executors.newSingleThreadExecutor()

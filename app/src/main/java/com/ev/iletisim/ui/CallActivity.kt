@@ -231,27 +231,37 @@ class CallActivity : Activity(), CallManager.Listener {
             setPadding(0, 0, 0, (24 * density).toInt())
         }
         controls = LinearLayout(this).apply { visibility = android.view.View.GONE }
-        controls.addView(button("Sessiz") {}.also { b ->
+        controls.addView(button("Sessiz", Look.TONAL) {}.also { b ->
             b.setOnClickListener {
                 muted = !muted
                 media?.setMuted(muted)
                 b.text = if (muted) "Sesi aç" else "Sessiz"
             }
         })
-        controls.addView(button("Kamera kapat") {}.also { b ->
+        controls.addView(button("Kamera kapat", Look.TONAL) {}.also { b ->
             b.setOnClickListener {
                 cameraOff = !cameraOff
                 media?.setCameraOff(cameraOff)
                 b.text = if (cameraOff) "Kamera aç" else "Kamera kapat"
             }
         })
-        controls.addView(button("Kamerayı çevir") { media?.switchCamera() })
+        controls.addView(button("Kamerayı çevir", Look.TONAL) { media?.switchCamera() })
+        for (i in 0 until controls.childCount) {
+            (controls.getChildAt(i).layoutParams as? LinearLayout.LayoutParams)?.marginEnd = dp(8)
+        }
         bottom.addView(controls)
 
         val actions = LinearLayout(this)
         acceptButton = button("Cevapla") { onAcceptPressed() }.apply { visibility = android.view.View.GONE }
         actions.addView(acceptButton)
-        actions.addView(button("Kapat") { Ev.io.execute { endFromUi() } })
+        actions.addView(button("Kapat", Look.DANGER) { Ev.io.execute { endFromUi() } })
+        for (i in 0 until actions.childCount) {
+            actions.getChildAt(i).layoutParams = LinearLayout.LayoutParams(dp(140), LinearLayout.LayoutParams.WRAP_CONTENT).apply {
+                topMargin = dp(12)
+                marginStart = dp(8)
+                marginEnd = dp(8)
+            }
+        }
         bottom.addView(actions)
         root.addView(bottom, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM))
         root.setBackgroundColor(android.graphics.Color.BLACK)

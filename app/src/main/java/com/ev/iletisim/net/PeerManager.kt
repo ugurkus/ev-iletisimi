@@ -59,11 +59,20 @@ class PeerManager(
     /** Dinlenen port; keşif servisi bunu ilan eder. */
     val port: Int get() = server?.localPort ?: -1
 
-    fun start(bindAddress: InetAddress? = null) {
+    /**
+     * port: önce bu sabit port denenir (QR'daki doğrudan adres bunu kullanır),
+     * doluysa sistem boş bir port verir.
+     */
+    fun start(bindAddress: InetAddress? = null, port: Int = 0) {
         running = true
         val s = ServerSocket()
         s.reuseAddress = true
-        s.bind(InetSocketAddress(bindAddress, 0))
+        try {
+            s.bind(InetSocketAddress(bindAddress, port))
+        } catch (e: IOException) {
+            if (port == 0) throw e
+            s.bind(InetSocketAddress(bindAddress, 0))
+        }
         server = s
         workers.execute { acceptLoop(s) }
         timer.scheduleWithFixedDelay(::maintenance, RETRY_SECONDS, RETRY_SECONDS, TimeUnit.SECONDS)
@@ -108,11 +117,18 @@ class PeerManager(
         }
     }
 
+    /** Keşifte görülen ama henüz bağlanılamayan cihaz sayısı ve son hata, ekranda gösterilir. */
+    fun knownCount() = endpoints.size
+    fun isKnown(peerId: String) = endpoints.containsKey(peerId)
+    @Volatile var lastError: String? = null
+        private set
+
     private fun maintenance() {
-        val now = System.currentTimeMillis()
-        for ((peerId, ep) in endpoints) {
-            if (connections.containsKey(peerId)) continue
-            if (me.deviceId < peerId || now - ep.seenAt > GRACE_MS) dial(peerId)
+        // Bağlı olmayan her bilinen cihaz yeniden denenir; iki taraf da arayabilir,
+        // çift bağlantıyı register() ayıklar. Tek tarafın araması ağda engellenirse
+        // diğer taraf yine bağlanabilsin.
+        for (peerId in endpoints.keys) {
+            if (!connections.containsKey(peerId)) dial(peerId)
         }
         for (c in connections.values) sendFrame(c.peerId, JSONObject().put("type", "ping"))
     }
@@ -126,7 +142,8 @@ class PeerManager(
                 socket.connect(InetSocketAddress(ep.host, ep.port), CONNECT_TIMEOUT_MS)
                 setUp(socket, dialerId = me.deviceId)
             } catch (e: IOException) {
-                log("Bağlanılamadı ${peerId.take(8)}: ${e.message}")
+                lastError = "Bağlanılamadı (${ep.host.hostAddress}): ${e.message}"
+                log(lastError!!)
             } finally {
                 dialing.remove(peerId)
             }
@@ -140,7 +157,8 @@ class PeerManager(
                 try {
                     setUp(socket, dialerId = null)
                 } catch (e: IOException) {
-                    log("Gelen bağlantı reddedildi: ${e.message}")
+                    lastError = "Gelen bağlantı reddedildi: ${e.message}"
+                    log(lastError!!)
                     try { socket.close() } catch (_: IOException) {}
                 }
             }
@@ -205,8 +223,9 @@ class PeerManager(
     }
 
     companion object {
+        /** Sabit dinleme portu; QR'a yazılır. */
+        const val PREFERRED_PORT = 47100
         private const val RETRY_SECONDS = 10L
-        private const val GRACE_MS = 15_000L
         private const val CONNECT_TIMEOUT_MS = 5_000
         private const val READ_TIMEOUT_MS = 45_000
     }

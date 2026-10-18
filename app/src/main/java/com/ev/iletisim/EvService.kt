@@ -14,10 +14,13 @@ import android.net.wifi.WifiManager
 import android.os.Build
 import android.os.IBinder
 import android.util.Log
+import java.net.InetAddress
 import com.ev.iletisim.core.CallManager
 import com.ev.iletisim.core.CallState
 import com.ev.iletisim.core.ChatMessage
 import com.ev.iletisim.core.PeerInfo
+import com.ev.iletisim.core.Crypto
+import com.ev.iletisim.net.BroadcastDiscovery
 import com.ev.iletisim.net.Discovery
 import com.ev.iletisim.net.PeerManager
 import com.ev.iletisim.ui.CallActivity
@@ -31,6 +34,7 @@ import com.ev.iletisim.update.ApkServer
  */
 class EvService : Service(), PeerManager.Events, CallManager.Listener {
     private var discovery: Discovery? = null
+    private var broadcast: BroadcastDiscovery? = null
     private var multicastLock: WifiManager.MulticastLock? = null
 
     override fun onBind(intent: Intent?): IBinder? = null
@@ -62,9 +66,22 @@ class EvService : Service(), PeerManager.Events, CallManager.Listener {
         Ev.peers = manager
         Ev.calls = calls
         Ev.io.execute {
-            manager.start()
+            try {
+                manager.start(port = PeerManager.PREFERRED_PORT)
+            } catch (e: java.io.IOException) {
+                Ev.netProblem = "Ağ dinlenemiyor: ${e.message}"
+                Ev.notifyChanged()
+                return@execute
+            }
             ApkServer.start(this)
             discovery = Discovery(this, me.deviceId, manager::onEndpoint).also { it.start(manager.port) }
+            broadcast = BroadcastDiscovery(me.deviceId, Crypto.familyId(me.familySecret), manager::onEndpoint)
+                .also { it.start(manager.port) }
+            // Keşif hiç çalışmasa bile QR'ı gösteren cihaza doğrudan bağlanmayı dene
+            Ev.identities.inviterHint()?.let { hint ->
+                runCatching { InetAddress.getByName(hint.host) }.getOrNull()
+                    ?.let { manager.onEndpoint(hint.deviceId, it, hint.port) }
+            }
         }
     }
 
@@ -72,6 +89,7 @@ class EvService : Service(), PeerManager.Events, CallManager.Listener {
 
     override fun onDestroy() {
         discovery?.stop()
+        broadcast?.stop()
         Ev.calls?.shutdown()
         Ev.calls = null
         Ev.peers?.stop()

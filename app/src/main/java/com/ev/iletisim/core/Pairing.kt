@@ -6,13 +6,24 @@ import org.json.JSONObject
  * Yetişkin telefonun gösterdiği QR'ın içeriği: aile sırrı ve yeni cihaza verilen ad ve rol.
  * QR'ı gören herkes aileye katılabilir, bu yüzden ekranda sadece eşleştirme sırasında durur.
  */
-data class PairingInvite(val familySecret: ByteArray, val name: String, val role: Role) {
+data class PairingInvite(
+    val familySecret: ByteArray,
+    val name: String,
+    val role: Role,
+    /** QR'ı gösteren cihazın adresi; keşif çalışmazsa yeni cihaz doğrudan buraya bağlanır. */
+    val inviter: Hint? = null,
+) {
+    data class Hint(val deviceId: String, val host: String, val port: Int)
+
     fun encode(): String = JSONObject()
         .put("app", "ev-iletisim")
         .put("v", 1)
         .put("s", Crypto.b64(familySecret))
         .put("n", name)
         .put("r", role.wire)
+        .apply {
+            if (inviter != null) put("id", inviter.deviceId).put("h", inviter.host).put("p", inviter.port)
+        }
         .toString()
 
     companion object {
@@ -24,7 +35,12 @@ data class PairingInvite(val familySecret: ByteArray, val name: String, val role
                 val secret = Crypto.unb64(o.getString("s"))
                 val name = o.getString("n").trim()
                 if (secret.size != 32 || name.isEmpty()) null
-                else PairingInvite(secret, name, Role.fromWire(o.getString("r")))
+                else {
+                    val hint = if (o.has("id") && o.has("h") && o.optInt("p") in 1..65535) {
+                        Hint(o.getString("id"), o.getString("h"), o.getInt("p"))
+                    } else null
+                    PairingInvite(secret, name, Role.fromWire(o.getString("r")), hint)
+                }
             }
         } catch (e: Exception) {
             null

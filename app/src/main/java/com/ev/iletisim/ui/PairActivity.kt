@@ -43,7 +43,9 @@ class PairActivity : Activity() {
             val n = name.text.toString().trim()
             if (n.isNotEmpty()) {
                 val role = if (adult.isChecked) Role.ADMIN else Role.CHILD
-                qr.setImageBitmap(render(PairingInvite(me.familySecret, n, role).encode()))
+                val port = Ev.peers?.port ?: -1
+                val hint = wifiAddress()?.takeIf { port > 0 }?.let { PairingInvite.Hint(me.deviceId, it, port) }
+                qr.setImageBitmap(render(PairingInvite(me.familySecret, n, role, hint).encode()))
             }
         })
         root.addView(text("Yeni cihazda \"Aileye katıl\" deyip bu QR'ı okutun."))

@@ -12,8 +12,6 @@ import com.ev.iletisim.update.ApkServer
 import com.google.zxing.BarcodeFormat
 import com.google.zxing.qrcode.QRCodeWriter
 import java.io.File
-import java.net.Inet4Address
-import java.net.NetworkInterface
 
 /**
  * Uygulamanın kendisini diğer cihazlara verir: ya ev Wi‑Fi'ında küçük bir
@@ -52,14 +50,6 @@ class ShareActivity : Activity() {
             .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         startActivity(Intent.createChooser(send, "Uygulamayı gönder"))
     }
-
-    private fun wifiAddress(): String? =
-        NetworkInterface.getNetworkInterfaces()?.toList().orEmpty()
-            .filter { it.isUp && !it.isLoopback }
-            .sortedBy { if (it.name.startsWith("wlan")) 0 else 1 }
-            .flatMap { it.inetAddresses.toList() }
-            .firstOrNull { it is Inet4Address && it.isSiteLocalAddress }
-            ?.hostAddress
 
     private fun qrBitmap(content: String, size: Int = 720): Bitmap {
         val matrix = QRCodeWriter().encode(content, BarcodeFormat.QR_CODE, size, size)

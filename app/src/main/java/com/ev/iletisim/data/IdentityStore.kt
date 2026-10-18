@@ -25,7 +25,20 @@ class IdentityStore(context: Context) {
     /** İlk yetişkin telefon yeni bir aile kurar. */
     fun createFamily(name: String): Identity = save(Crypto.randomBytes(32), name, Role.ADMIN)
 
-    fun join(invite: PairingInvite): Identity = save(invite.familySecret, invite.name, invite.role)
+    fun join(invite: PairingInvite): Identity {
+        val identity = save(invite.familySecret, invite.name, invite.role)
+        invite.inviter?.let {
+            prefs.edit().putString("hint_id", it.deviceId).putString("hint_host", it.host).putInt("hint_port", it.port).apply()
+        }
+        return identity
+    }
+
+    /** Katılırken QR'dan öğrenilen ilk cihazın adresi (yoksa null). */
+    fun inviterHint(): PairingInvite.Hint? {
+        val id = prefs.getString("hint_id", null) ?: return null
+        val host = prefs.getString("hint_host", null) ?: return null
+        return PairingInvite.Hint(id, host, prefs.getInt("hint_port", 0))
+    }
 
     private fun save(secret: ByteArray, name: String, role: Role): Identity {
         val identity = Identity(UUID.randomUUID().toString(), name, role, secret)

@@ -26,18 +26,28 @@ class ChatActivity : Activity() {
         peerId = intent.getStringExtra(EXTRA_PEER) ?: return finish()
         val peer = Ev.db.contact(peerId)
         val root = column()
-        val header = LinearLayout(this)
+        val header = LinearLayout(this).apply { gravity = android.view.Gravity.CENTER_VERTICAL }
         header.addView(title(peer?.name ?: "Sohbet"), LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
-        header.addView(button("Görüntülü ara") { startActivity(CallActivity.callIntent(this, peerId)) })
+        header.addView(button("📹 Ara", Look.TONAL) { startActivity(CallActivity.callIntent(this, peerId)) })
         root.addView(header)
         list = ListView(this).apply {
+            divider = null
             transcriptMode = ListView.TRANSCRIPT_MODE_ALWAYS_SCROLL
             isStackFromBottom = true
         }
         root.addView(list, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f))
         val row = LinearLayout(this)
-        val input = EditText(this).apply { hint = "Mesaj yaz" }
-        row.addView(input, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+        val pal = Palette(this)
+        val input = EditText(this).apply {
+            hint = "Mesaj yaz"
+            textSize = 17f
+            setTextColor(pal.text)
+            setHintTextColor(pal.subtle)
+            background = rounded(pal.surface, 28)
+            setPadding(dp(20), dp(14), dp(20), dp(14))
+            minHeight = dp(56)
+        }
+        row.addView(input, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply { marginEnd = dp(8) })
         row.addView(button("Gönder") {
             val text = input.text.toString().trim()
             if (text.isNotEmpty()) {
